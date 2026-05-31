@@ -1,0 +1,215 @@
+rgb_gray:
+  name: "Espaços RGB e Escala de Cinza"
+  category: "Aquisição e espaços de cor"
+  what: >
+    Uma imagem digital é uma matriz de pixels. No modelo RGB cada pixel guarda três
+    valores (Vermelho, Verde e Azul) de 0 a 255, totalizando ~16,7 milhões de cores.
+    A escala de cinza reduz cada pixel a um único valor de intensidade luminosa.
+  how: >
+    O OpenCV lê a imagem em ordem BGR e o pipeline a converte para RGB. A escala de
+    cinza usa a média ponderada dos canais (0.299R + 0.587G + 0.114B), que aproxima a
+    sensibilidade do olho humano, mais sensível ao verde. Em seguida a imagem é
+    redimensionada (lado máximo de 1200 px) e normalizada para o intervalo [0,1].
+  goal: >
+    Padronizar a entrada e simplificar os dados: muitas operações (bordas, Otsu) atuam
+    sobre intensidade, não sobre cor, e ficam mais rápidas e estáveis em 1 canal.
+  interpret: >
+    Compare a imagem original com a versão em cinza: detalhes de cor desaparecem, mas
+    a estrutura de luz e sombra (o que importa para bordas e limiarização) é preservada.
+  params: "Conversão BGR->RGB->GRAY, resize (máx 1200 px), normalização [0,1]"
+
+hsv_lab:
+  name: "Espaços HSV e LAB"
+  category: "Aquisição e espaços de cor"
+  what: >
+    HSV descreve a cor por Matiz (tom), Saturação (pureza) e Valor (brilho). LAB
+    separa a Luminosidade (L) de dois eixos de cor (a: verde-vermelho, b: azul-amarelo)
+    e foi desenhado para se aproximar da percepção humana.
+  how: >
+    O pipeline converte a imagem RGB para HSV e para LAB. No HSV, isolar um intervalo
+    de Matiz permite segmentar por faixa de cor (ex.: tons de verde da vegetação)
+    independente da iluminação. No LAB, a separação luz/cor ajuda comparações
+    colorimétricas mais fiéis ao que enxergamos.
+  goal: >
+    Oferecer espaços de cor mais adequados que o RGB para tarefas específicas:
+    segmentação por cor (HSV) e análise colorimétrica perceptual (LAB).
+  interpret: >
+    As visualizações são em falsa cor (os três canais exibidos como imagem) e servem
+    para evidenciar a transformação, não para leitura literal de cores.
+  params: "Faixa de verde HSV usada: (35,40,40) a (85,255,255)"
+
+histogram:
+  name: "Histograma RGB"
+  category: "Análise de intensidade"
+  what: >
+    O histograma conta quantos pixels existem em cada nível de intensidade (0 a 255),
+    para cada canal de cor separadamente.
+  how: >
+    Para cada canal R, G e B, contam-se as ocorrências de cada intensidade e plota-se
+    a distribuição. O formato da curva revela brilho, contraste e a cor predominante
+    da cena.
+  goal: >
+    Diagnosticar a imagem antes do processamento: identificar sub/superexposição,
+    baixo contraste e qual canal concentra mais energia.
+  interpret: >
+    Curvas deslocadas para a esquerda indicam imagem escura; para a direita, clara.
+    O canal com maior média sugere a predominância de cor (verde -> vegetação,
+    azul -> água/céu, vermelho -> solo/áreas quentes).
+
+gaussian:
+  name: "Filtro Gaussiano"
+  category: "Filtros de suavização"
+  what: >
+    Filtro de suavização que reduz ruído borrando a imagem com pesos em forma de sino
+    (gaussiana): pixels vizinhos próximos pesam mais que os distantes.
+  how: >
+    Aplica uma convolução com um kernel gaussiano controlado pelo desvio padrão sigma.
+    Quanto maior o sigma, mais forte o borramento e maior a redução de ruído de alta
+    frequência.
+  goal: >
+    Limpar ruído fino e detalhes irrelevantes antes de etapas sensíveis a ruído, como
+    a detecção de bordas.
+  interpret: >
+    A imagem fica mais suave e uniforme; ruído some, mas bordas também perdem um pouco
+    de nitidez (o Gaussiano não distingue ruído de borda real).
+  params: "sigma = 1,5"
+
+median:
+  name: "Filtro de Mediana"
+  category: "Filtros de suavização"
+  what: >
+    Filtro não linear que substitui cada pixel pela mediana dos valores da vizinhança.
+  how: >
+    Para cada pixel, ordena os valores de uma janela (ex.: 5x5) e escolhe o valor do
+    meio. Por usar a mediana, valores extremos (ruído) são descartados sem misturar-se
+    à média.
+  goal: >
+    Remover ruído impulsivo (tipo "sal e pimenta") preservando bordas melhor que a
+    média simples.
+  interpret: >
+    Pontos isolados de ruído desaparecem e as bordas continuam relativamente nítidas,
+    diferentemente do Gaussiano que as suaviza.
+  params: "kernel = 5x5"
+
+bilateral:
+  name: "Filtro Bilateral"
+  category: "Filtros de suavização"
+  what: >
+    Filtro que suaviza a imagem preservando as bordas, combinando proximidade espacial
+    com semelhança de intensidade.
+  how: >
+    Cada pixel é a média ponderada dos vizinhos, mas o peso cai tanto com a distância
+    quanto com a diferença de cor/intensidade. Assim, vizinhos do "outro lado" de uma
+    borda quase não influenciam, e a borda se mantém.
+  goal: >
+    Reduzir ruído em áreas homogêneas sem borrar contornos importantes.
+  interpret: >
+    Compare com o Gaussiano: as regiões ficam lisas, mas as transições (bordas)
+    continuam definidas. É o filtro usado como referência no cálculo de PSNR/SNR.
+  params: "diâmetro 9, sigmaColor 75, sigmaSpace 75"
+
+canny:
+  name: "Detecção de Bordas (Canny)"
+  category: "Detecção e segmentação"
+  what: >
+    Algoritmo clássico que detecta bordas, ou seja, transições fortes de intensidade
+    que costumam corresponder a contornos de objetos.
+  how: >
+    Tem várias etapas: suaviza a imagem, calcula o gradiente (direção e intensidade da
+    variação), aplica supressão de não-máximos (afina as bordas) e uma histerese com
+    dois limiares: pixels acima do limiar alto são borda; entre os limiares, só se
+    conectados a uma borda forte; abaixo do baixo, descartados.
+  goal: >
+    Extrair os contornos estruturais da cena de forma robusta e com linhas finas.
+  interpret: >
+    Linhas brancas sobre fundo preto marcam as bordas. Limiares mais baixos detectam
+    mais bordas (e mais ruído); mais altos, apenas as transições mais fortes.
+  params: "limiar baixo = 50, limiar alto = 150"
+
+otsu:
+  name: "Limiarização de Otsu"
+  category: "Detecção e segmentação"
+  what: >
+    Método de segmentação que separa a imagem em duas classes (objeto x fundo)
+    escolhendo automaticamente o melhor limiar de intensidade.
+  how: >
+    Testa todos os limiares possíveis e escolhe aquele que maximiza a variância entre
+    as duas classes (equivalente a minimizar a variância dentro de cada classe).
+    Funciona bem quando o histograma é bimodal (dois "morros").
+  goal: >
+    Obter uma máscara binária de segmentação sem precisar ajustar o limiar manualmente.
+  interpret: >
+    O resultado é preto e branco: branco = uma classe, preto = a outra. O "threshold
+    calculado" mostra em que intensidade o corte foi feito.
+  params: "THRESH_BINARY + THRESH_OTSU (limiar automático)"
+
+morphology:
+  name: "Morfologia Matemática"
+  category: "Detecção e segmentação"
+  what: >
+    Operações que refinam máscaras binárias com base na forma, usando um elemento
+    estruturante (uma pequena janela, ex.: 3x3).
+  how: >
+    A erosão encolhe regiões brancas (remove ruído e pontos isolados); a dilatação as
+    expande (preenche buracos). Aplicar erosão seguida de dilatação (abertura) limpa
+    ruído mantendo o tamanho geral das regiões.
+  goal: >
+    Melhorar a máscara da limiarização: eliminar pontos espúrios e tornar as regiões
+    mais contínuas antes de extrair contornos.
+  interpret: >
+    Compare a máscara de Otsu antes e depois: pequenos pontos somem e as regiões ficam
+    mais "limpas" e conexas.
+  params: "erosão seguida de dilatação, kernel 3x3, 1 iteração"
+
+contours:
+  name: "Detecção de Contornos"
+  category: "Detecção e segmentação"
+  what: >
+    Contornos são as curvas que delimitam as regiões segmentadas; podem ser contados
+    e medidos.
+  how: >
+    A partir da máscara refinada, o algoritmo encontra as fronteiras das regiões
+    brancas e as desenha sobre a imagem original em cor destacada. Também permite
+    contar quantas regiões distintas existem.
+  goal: >
+    Localizar e quantificar visualmente as regiões de interesse detectadas na cena.
+  interpret: >
+    As linhas coloridas sobre a foto mostram o que foi segmentado; o número de
+    contornos indica quantas regiões separadas foram encontradas.
+
+vegetation:
+  name: "Índice de Vegetação (VARI / NDVI adaptado)"
+  category: "Análise ambiental"
+  what: >
+    Índice que estima a presença de vegetação a partir das cores da imagem. O NDVI
+    clássico precisa da banda infravermelha (NIR), ausente em fotos comuns; por isso
+    usamos o VARI, derivado apenas de RGB.
+  how: >
+    VARI = (G - R) / (G + R - B). A vegetação saudável reflete mais verde e menos
+    vermelho, gerando valores positivos. Aplicando um limiar ao índice, obtemos uma
+    máscara das áreas vegetadas e o percentual de cobertura.
+  goal: >
+    Dar um caráter ambiental ao projeto, estimando cobertura vegetal sem sensor
+    especializado.
+  interpret: >
+    No mapa de calor, verde = vegetação provável, vermelho = solo/água/construção. A
+    máscara isola as áreas verdes e a métrica "cobertura vegetal" resume o percentual.
+  params: "VARI = (G-R)/(G+R-B), limiar = 0,05"
+
+metrics:
+  name: "Métricas (PSNR, SNR, Área, Cobertura)"
+  category: "Métricas e análise"
+  what: >
+    Números que quantificam objetivamente o resultado do processamento, complementando
+    a inspeção visual.
+  how: >
+    PSNR e SNR medem, em decibéis, quanto a versão filtrada (bilateral) difere da
+    imagem em cinza: valores altos indicam pouca alteração/ruído. Área segmentada é a
+    porcentagem de pixels na máscara de Otsu; cobertura vegetal é a porcentagem na
+    máscara do VARI; o valor médio de pixel resume o brilho geral.
+  goal: >
+    Sustentar a análise crítica com evidência numérica, não só qualitativa.
+  interpret: >
+    PSNR/SNR mais altos = filtro preservou bem a imagem. Área segmentada alta = grande
+    parte da cena destacada. Cobertura vegetal alta = cena predominantemente verde.
+  params: "PSNR, SNR, % área segmentada, % cobertura vegetal, valor médio de pixel"

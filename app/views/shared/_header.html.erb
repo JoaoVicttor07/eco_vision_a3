@@ -1,0 +1,16 @@
+<header class="site-header">
+  <div class="site-header-inner">
+    <%= link_to root_path, class: "brand" do %>
+      <span class="brand-mark" aria-hidden="true"><%= icon(:leaf, size: 18) %></span>
+      <span class="brand-text">Eco Vision <strong>A3</strong></span>
+    <% end %>
+
+    <nav class="site-nav" aria-label="Navegacao principal">
+      <%= link_to "Pipeline", root_path(anchor: "pipeline"), class: "nav-link" %>
+      <%= link_to "Técnicas", techniques_path, class: "nav-link #{'is-active' if current_page?(techniques_path)}" %>
+      <%= link_to "Histórico", analyses_path, class: "nav-link #{'is-active' if current_page?(analyses_path)}" %>
+    </nav>
+
+    <%= link_to "Iniciar análise", new_analysis_path, class: "nav-cta" %>
+  </div>
+</header>

@@ -1,0 +1,42 @@
+<% content_for :title, "Histórico de análises — Eco Vision A3" %>
+
+<main class="page-shell">
+  <header class="section-head section-head-row">
+    <div>
+      <p class="step-kicker">Histórico</p>
+      <h1>Análises realizadas</h1>
+    </div>
+    <%= link_to "Nova análise", new_analysis_path, class: "primary-action" %>
+  </header>
+
+  <% if @analyses.any? %>
+    <div class="history-grid">
+      <% @analyses.each do |analysis| %>
+        <%= link_to analysis_path(analysis), class: "history-card" do %>
+          <figure class="history-thumb">
+            <%= image_tag analysis.files["original"], alt: "Miniatura da análise #{analysis.original_filename}" %>
+          </figure>
+          <div class="history-body">
+            <p class="history-name"><%= analysis.original_filename.presence || "Imagem sem nome" %></p>
+            <p class="history-date"><%= analysis.created_at&.strftime("%d/%m/%Y às %H:%M") %></p>
+            <dl class="history-metrics">
+              <div>
+                <dt>Área segmentada</dt>
+                <dd><%= analysis.metrics["segmented_area_percent"] %>%</dd>
+              </div>
+              <div>
+                <dt>Cobertura vegetal</dt>
+                <dd><%= analysis.metrics["vegetation_cover_percent"] %>%</dd>
+              </div>
+            </dl>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="empty-state">
+      <p>Nenhuma análise registrada ainda.</p>
+      <%= link_to "Iniciar análise", new_analysis_path, class: "primary-action" %>
+    </div>
+  <% end %>
+</main>

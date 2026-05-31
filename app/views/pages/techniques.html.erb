@@ -1,0 +1,52 @@
+<% content_for :title, "Técnicas — Eco Vision A3" %>
+
+<main class="page-shell techniques-shell">
+  <header class="section-head">
+    <p class="kicker">Fundamentação técnica</p>
+    <h1>Como cada técnica funciona</h1>
+    <p class="section-lead">
+      Cada etapa do pipeline aplica uma técnica de Computação Gráfica. Abaixo, o que é,
+      como funciona, qual o objetivo e como interpretar o resultado de cada uma.
+    </p>
+  </header>
+
+  <nav class="techniques-toc" aria-label="Índice de técnicas">
+    <% @techniques.each do |technique| %>
+      <a href="#<%= technique.key %>"><%= technique.name %></a>
+    <% end %>
+  </nav>
+
+  <% @categories.each do |category, techniques| %>
+    <section class="techniques-category">
+      <h2 class="category-title"><%= category %></h2>
+      <div class="techniques-list">
+        <% techniques.each do |technique| %>
+          <article class="technique-card" id="<%= technique.key %>">
+            <h3><%= technique.name %></h3>
+            <dl class="technique-fields">
+              <div>
+                <dt>O que e</dt>
+                <dd><%= technique.what %></dd>
+              </div>
+              <div>
+                <dt>Como funciona</dt>
+                <dd><%= technique.how %></dd>
+              </div>
+              <div>
+                <dt>Objetivo</dt>
+                <dd><%= technique.goal %></dd>
+              </div>
+              <div>
+                <dt>Como interpretar</dt>
+                <dd><%= technique.interpret %></dd>
+              </div>
+            </dl>
+            <% if technique.params.present? %>
+              <p class="technique-params"><span>Parâmetros no projeto:</span> <%= technique.params %></p>
+            <% end %>
+          </article>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
+</main>

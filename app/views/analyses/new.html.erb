@@ -1,0 +1,43 @@
+<main class="page-shell landing-shell">
+  <section class="upload-panel">
+    <% if flash.now[:alert].present? %>
+      <div class="alert"><%= flash.now[:alert] %></div>
+    <% end %>
+
+    <div class="intro">
+      <p class="eyebrow">Nova análise</p>
+      <h1>Envie uma imagem</h1>
+      <p>
+        Selecione uma imagem ambiental e visualize um pipeline completo com filtros,
+        bordas, segmentação, histograma, contornos, índice de vegetação e métricas.
+        Em dúvida sobre as técnicas? <%= link_to "veja a página de técnicas", techniques_path %>.
+      </p>
+    </div>
+
+    <div class="feature-strip" aria-label="Etapas do processamento">
+      <span>RGB</span>
+      <span>Otsu</span>
+      <span>Canny</span>
+      <span>Morfologia</span>
+    </div>
+
+    <%= form_with url: analyses_path, multipart: true, class: "upload-form", data: { turbo: false, controller: "upload", action: "submit->upload#submit" } do |form| %>
+      <label class="file-picker" data-upload-target="dropzone">
+        <%= form.file_field :image,
+          accept: "image/jpeg,image/png,image/webp,image/bmp,image/tiff",
+          required: true,
+          data: { upload_target: "input", action: "change->upload#select" } %>
+
+        <span class="file-picker-visual">
+          <span class="upload-icon" aria-hidden="true"></span>
+          <span class="file-picker-title">Arraste ou selecione uma imagem</span>
+          <span class="file-picker-name" data-upload-target="filename">JPG, PNG, WEBP, BMP ou TIFF</span>
+        </span>
+
+        <img class="preview-image" data-upload-target="preview" alt="Prévia da imagem selecionada">
+      </label>
+
+      <%= form.submit "Processar imagem", class: "primary-action", data: { upload_target: "button" } %>
+    <% end %>
+  </section>
+</main>

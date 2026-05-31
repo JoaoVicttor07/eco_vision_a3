@@ -1,0 +1,143 @@
+<% content_for :title, "Eco Vision A3 — Processamento Digital de Imagens Ambientais" %>
+
+<main class="home-shell">
+  <section class="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="hero-content">
+      <span class="badge reveal">
+        <%= icon(:sparkles, size: 15) %>
+        Computação Gráfica · Avaliação A3
+      </span>
+
+      <h1 class="hero-title reveal reveal-1">
+        Processamento digital<br>
+        de <span class="hero-accent">imagens ambientais</span>
+      </h1>
+
+      <p class="hero-lead reveal reveal-2">
+        Envie uma imagem e visualize, passo a passo, um pipeline completo:
+        espaços de cor, filtros, detecção de bordas, segmentação e análise de
+        vegetação — com interpretação automática dos resultados.
+      </p>
+
+      <div class="hero-actions reveal reveal-3">
+        <%= link_to new_analysis_path, class: "primary-action" do %>
+          Enviar imagem <%= icon(:arrow_right, size: 18) %>
+        <% end %>
+        <%= link_to techniques_path, class: "ghost-link" do %>
+          Ver técnicas aplicadas <%= icon(:arrow_right, size: 16) %>
+        <% end %>
+      </div>
+
+      <div class="hero-chips reveal reveal-4" aria-label="Técnicas do pipeline">
+        <span>RGB / HSV / LAB</span>
+        <span>HISTOGRAMA</span>
+        <span>CANNY</span>
+        <span>OTSU</span>
+        <span>MORFOLOGIA</span>
+        <span>VARI</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="home-section" id="pipeline">
+    <header class="section-head">
+      <p class="kicker">Como funciona</p>
+      <h2>Três passos, um pipeline completo</h2>
+    </header>
+    <ol class="steps-grid">
+      <li class="step-card">
+        <div class="step-top">
+          <span class="step-ico"><%= icon(:upload, size: 22) %></span>
+          <span class="step-number">01</span>
+        </div>
+        <h3>Envie a imagem</h3>
+        <p>Arraste ou selecione uma foto ambiental (JPG, PNG, WEBP, BMP ou TIFF).</p>
+      </li>
+      <li class="step-card">
+        <div class="step-top">
+          <span class="step-ico"><%= icon(:cpu, size: 22) %></span>
+          <span class="step-number">02</span>
+        </div>
+        <h3>Processamento automático</h3>
+        <p>Um script Python (OpenCV + NumPy) executa toda a sequência e gera métricas por etapa.</p>
+      </li>
+      <li class="step-card is-featured">
+        <div class="step-top">
+          <span class="step-ico"><%= icon(:line_chart, size: 22) %></span>
+          <span class="step-number">03</span>
+        </div>
+        <h3>Análise e histórico</h3>
+        <p>Veja o comparativo, leia a análise crítica e revisite qualquer execução salva.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="home-section">
+    <header class="section-head">
+      <p class="kicker">Técnicas</p>
+      <h2>Cada etapa do pipeline, explicada</h2>
+    </header>
+    <div class="tech-matrix">
+      <% @pipeline_techniques.each do |technique| %>
+        <%= link_to techniques_path(anchor: technique[:anchor]), class: "tech-cell" do %>
+          <span class="tech-ico"><%= icon(technique[:icon], size: 22) %></span>
+          <h3><%= technique[:title] %></h3>
+          <p><%= technique[:short] %></p>
+        <% end %>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="home-section history-section">
+    <header class="section-head section-head-row">
+      <div>
+        <p class="kicker">Histórico</p>
+        <h2>Análises realizadas</h2>
+      </div>
+      <% if @analyses.any? %>
+        <%= link_to "Ver todas", analyses_path, class: "secondary-action" %>
+      <% end %>
+    </header>
+
+    <% if @analyses.any? %>
+      <div class="history-grid">
+        <% @analyses.each do |analysis| %>
+          <%= link_to analysis_path(analysis), class: "history-card" do %>
+            <figure class="history-thumb">
+              <%= image_tag analysis.files["original"], alt: "Miniatura da análise #{analysis.original_filename}" %>
+            </figure>
+            <div class="history-body">
+              <p class="history-name"><%= analysis.original_filename.presence || "Imagem sem nome" %></p>
+              <p class="history-date"><%= analysis.created_at&.strftime("%d/%m/%Y às %H:%M") %></p>
+              <dl class="history-metrics">
+                <div>
+                  <dt>Área segmentada</dt>
+                  <dd><%= analysis.metrics["segmented_area_percent"] %>%</dd>
+                </div>
+                <div>
+                  <dt>Cobertura vegetal</dt>
+                  <dd><%= analysis.metrics["vegetation_cover_percent"] %>%</dd>
+                </div>
+              </dl>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    <% else %>
+      <div class="empty-state">
+        <p>Nenhuma análise ainda. Que tal processar a primeira imagem?</p>
+        <%= link_to "Iniciar análise", new_analysis_path, class: "primary-action" %>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="home-section">
+    <div class="cta-panel">
+      <span class="cta-ico"><%= icon(:upload, size: 26) %></span>
+      <h2>Pronto para a próxima análise?</h2>
+      <p>Solte uma imagem e veja o pipeline completo executar em segundos.</p>
+      <%= link_to "Enviar nova imagem", new_analysis_path, class: "primary-action" %>
+    </div>
+  </section>
+</main>

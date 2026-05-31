@@ -46,10 +46,11 @@ curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Instale as dependencias Ruby:
+Instale as dependencias Ruby e prepare o banco (SQLite, usado para o historico):
 
 ```bash
 bundle install
+bin/rails db:prepare
 ```
 
 ## Como rodar o app
@@ -58,8 +59,16 @@ bundle install
 bin/rails server
 ```
 
-Acesse `http://localhost:3000`, envie uma imagem ambiental e aguarde o
-processamento. Os resultados sao salvos em `public/resultados/<id>`.
+Acesse `http://localhost:3000`. A aplicacao tem:
+
+- **Inicio (`/`)** — landing de apresentacao, com botao para iniciar a analise e o
+  historico das analises ja realizadas (data/hora + metricas), que abrem o detalhe.
+- **Nova analise (`/analyses/new`)** — envio da imagem ambiental.
+- **Tecnicas (`/tecnicas`)** — explicacao tecnica de cada metodo do pipeline.
+- **Resultado (`/analyses/:id`)** — detalhamento de uma analise, revisitavel pelo historico.
+
+Cada analise e persistida no banco (metadados/metricas/caminhos); as imagens geradas
+ficam em `public/resultados/<id>`.
 
 Por padrao o Rails tenta usar `.venv/bin/python`. Se quiser apontar para outro
 Python, defina:

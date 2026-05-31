@@ -31,7 +31,7 @@ except ModuleNotFoundError as error:
     payload = {
         "ok": False,
         "error": (
-            f"Dependencia Python ausente: {missing_package}. "
+            f"Dependência Python ausente: {missing_package}. "
             "Crie o ambiente com `python3 -m venv .venv` e instale com "
             "`.venv/bin/python -m pip install -r requirements.txt`."
         ),
@@ -49,7 +49,7 @@ PARAMETERS = {
     "canny_threshold_low": 50,
     "canny_threshold_high": 150,
     "otsu_method": "THRESH_BINARY + THRESH_OTSU",
-    "morphology": "erosion followed by dilation, 3x3 kernel, 1 iteration",
+    "morphology": "erosão seguida de dilatação, kernel 3x3, 1 iteração",
     "vegetation_index": "VARI = (G - R) / (G + R - B)",
     "vegetation_threshold": 0.05,
     "hsv_green_lower": "(35, 40, 40)",
@@ -110,7 +110,7 @@ def plot_histogram(image_rgb: np.ndarray, output_path: Path) -> None:
 
     plt.title("Histograma RGB da imagem original")
     plt.xlabel("Intensidade")
-    plt.ylabel("Frequencia")
+    plt.ylabel("Frequência")
     plt.xlim([0, 255])
     plt.grid(alpha=0.2)
     plt.legend()
@@ -171,10 +171,10 @@ def compute_vegetation(image_rgb: np.ndarray, threshold: float) -> tuple[np.ndar
 def plot_vegetation_index(vari: np.ndarray, output_path: Path) -> None:
     plt.figure(figsize=(8, 6))
     image = plt.imshow(vari, cmap="RdYlGn", vmin=-1.0, vmax=1.0)
-    plt.title("Indice de vegetacao (VARI)")
+    plt.title("Índice de vegetação (VARI)")
     plt.axis("off")
     colorbar = plt.colorbar(image, fraction=0.046, pad=0.04)
-    colorbar.set_label("VARI (verde = vegetacao)")
+    colorbar.set_label("VARI (verde = vegetação)")
     plt.tight_layout()
     plt.savefig(output_path, dpi=140)
     plt.close()
@@ -185,49 +185,49 @@ def build_analysis(metrics: dict[str, Any], channel_means: dict[str, float]) -> 
     dominant_channel = max(channel_means, key=channel_means.get)
     channel_label = {"R": "vermelho", "G": "verde", "B": "azul"}[dominant_channel]
     channel_hint = {
-        "R": "tons quentes (solo exposto, construcoes ou areas degradadas)",
-        "G": "predominancia de vegetacao saudavel",
-        "B": "presenca de agua ou ceu na cena",
+        "R": "tons quentes (solo exposto, construções ou áreas degradadas)",
+        "G": "predominância de vegetação saudável",
+        "B": "presença de água ou céu na cena",
     }[dominant_channel]
 
     area = metrics["segmented_area_percent"]
     if area < 15:
-        area_reading = "poucas regioes destacadas pela limiarizacao"
+        area_reading = "poucas regiões destacadas pela limiarização"
     elif area < 50:
-        area_reading = "regioes de interesse moderadas separadas do fundo"
+        area_reading = "regiões de interesse moderadas separadas do fundo"
     else:
-        area_reading = "grande parte da cena classificada como regiao de interesse"
+        area_reading = "grande parte da cena classificada como região de interesse"
 
     cover = metrics["vegetation_cover_percent"]
     if cover < 10:
-        cover_reading = "cobertura vegetal baixa, indicando area pouco verde ou degradada"
+        cover_reading = "cobertura vegetal baixa, indicando área pouco verde ou degradada"
     elif cover < 40:
-        cover_reading = "cobertura vegetal parcial, com mistura de vegetacao e outras superficies"
+        cover_reading = "cobertura vegetal parcial, com mistura de vegetação e outras superfícies"
     else:
-        cover_reading = "cobertura vegetal alta, compativel com area densamente vegetada"
+        cover_reading = "cobertura vegetal alta, compatível com área densamente vegetada"
 
     return {
         "original": (
-            f"Canal dominante: {channel_label} (media {channel_means[dominant_channel]:.1f}), "
+            f"Canal dominante: {channel_label} (média {channel_means[dominant_channel]:.1f}), "
             f"sugerindo {channel_hint}."
         ),
         "histogram": (
-            f"Medias por canal R={channel_means['R']:.1f}, G={channel_means['G']:.1f}, "
+            f"Médias por canal R={channel_means['R']:.1f}, G={channel_means['G']:.1f}, "
             f"B={channel_means['B']:.1f}. O canal {channel_label} concentra mais energia, "
-            "coerente com a distribuicao observada no histograma."
+            "coerente com a distribuição observada no histograma."
         ),
         "segmentation": (
             f"O limiar de Otsu ({metrics['otsu_threshold']:.0f}) gerou {area_reading} "
-            f"({area:.1f}% da area), com {metrics['contour_count']} contornos apos a morfologia."
+            f"({area:.1f}% da área), com {metrics['contour_count']} contornos após a morfologia."
         ),
         "vegetation": (
-            f"O indice VARI estima {cover:.1f}% de cobertura vegetal: {cover_reading}."
+            f"O índice VARI estima {cover:.1f}% de cobertura vegetal: {cover_reading}."
         ),
         "overall": (
-            f"A cena apresenta {channel_hint}; a limiarizacao destacou {area:.1f}% de regioes "
-            f"de interesse e o indice de vegetacao apontou {cover:.1f}% de area verde. "
+            f"A cena apresenta {channel_hint}; a limiarização destacou {area:.1f}% de regiões "
+            f"de interesse e o índice de vegetação apontou {cover:.1f}% de área verde. "
             f"PSNR de {metrics.get('psnr_bilateral_gray')} dB entre a imagem em cinza e a "
-            "versao filtrada por bilateral indica o grau de suavizacao aplicado preservando bordas."
+            "versão filtrada por bilateral indica o grau de suavização aplicado preservando bordas."
         ),
     }
 
@@ -249,11 +249,11 @@ def calculate_snr(reference_gray: np.ndarray, processed_gray: np.ndarray) -> flo
 
 def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str, Any]:
     if not input_path.exists():
-        fail(f"Arquivo nao encontrado: {input_path}")
+        fail(f"Arquivo não encontrado: {input_path}")
 
     image_bgr = cv2.imread(str(input_path), cv2.IMREAD_COLOR)
     if image_bgr is None:
-        fail("Nao foi possivel ler a imagem. Envie um arquivo JPG, PNG ou outro formato suportado pelo OpenCV.")
+        fail("Não foi possível ler a imagem. Envie um arquivo JPG, PNG ou outro formato suportado pelo OpenCV.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 

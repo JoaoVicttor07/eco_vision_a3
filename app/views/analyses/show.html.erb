@@ -1,0 +1,295 @@
+<main class="page-shell results-shell" data-controller="lightbox" data-action="keydown@window->lightbox#closeOnEsc">
+  <section class="results-header">
+    <div>
+      <p class="eyebrow">Resultado do processamento</p>
+      <h1>Análise ambiental concluída</h1>
+    </div>
+
+    <%= link_to "Processar outra imagem", root_path, class: "secondary-action" %>
+  </section>
+
+  <section class="result-timeline" data-action="click->lightbox#open">
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "original"), alt: "Imagem original processada" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">01 | Entrada</p>
+        <h2>Imagem original</h2>
+        <%= link_to "Saiba mais sobre espaços de cor", techniques_path(anchor: "rgb_gray"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Imagem enviada para o pipeline, convertida de BGR para RGB e preservada como referência visual para todas as comparações.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Resolução original</dt>
+            <dd><%= @result.dig("metadata", "original_width") %> x <%= @result.dig("metadata", "original_height") %></dd>
+          </div>
+          <div>
+            <dt>Resolução processada</dt>
+            <dd><%= @result.dig("metadata", "processed_width") %> x <%= @result.dig("metadata", "processed_height") %></dd>
+          </div>
+          <div>
+            <dt>Canais</dt>
+            <dd><%= @result.dig("metadata", "channels") %></dd>
+          </div>
+          <div>
+            <dt>Tamanho</dt>
+            <dd><%= @result.dig("metadata", "size_kb") %> KB</dd>
+          </div>
+        </dl>
+        <% if @result.dig("analysis", "original").present? %>
+          <p class="analysis-note"><strong>Análise:</strong> <%= @result.dig("analysis", "original") %></p>
+        <% end %>
+      </div>
+    </article>
+
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "contours"), alt: "Imagem com contornos segmentados" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">02 | Segmentação visual</p>
+        <h2>Contornos segmentados</h2>
+        <%= link_to "Saiba mais sobre contornos", techniques_path(anchor: "contours"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Sobreposição dos contornos encontrados após limiarização e morfologia, destacando regiões relevantes detectadas na cena.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Contornos</dt>
+            <dd><%= @result.dig("metrics", "contour_count") %></dd>
+          </div>
+          <div>
+            <dt>Área segmentada</dt>
+            <dd><%= @result.dig("metrics", "segmented_area_percent") %>%</dd>
+          </div>
+        </dl>
+        <% if @result.dig("analysis", "segmentation").present? %>
+          <p class="analysis-note"><strong>Análise:</strong> <%= @result.dig("analysis", "segmentation") %></p>
+        <% end %>
+      </div>
+    </article>
+
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "edges"), alt: "Bordas detectadas pelo Canny" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">03 | Bordas</p>
+        <h2>Bordas Canny</h2>
+        <%= link_to "Saiba mais sobre o Canny", techniques_path(anchor: "canny"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Detecção de bordas para revelar transições fortes de intensidade e contornos estruturais da imagem.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Limiar baixo</dt>
+            <dd><%= @result.dig("parameters", "canny_threshold_low") %></dd>
+          </div>
+          <div>
+            <dt>Limiar alto</dt>
+            <dd><%= @result.dig("parameters", "canny_threshold_high") %></dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "otsu_mask"), alt: "Máscara de segmentação por Otsu" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">04 | Limiarização</p>
+        <h2>Máscara Otsu</h2>
+        <%= link_to "Saiba mais sobre Otsu", techniques_path(anchor: "otsu"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Segmentação binária por limiar automático, separando pixels em duas classes conforme a distribuição de intensidade.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Threshold calculado</dt>
+            <dd><%= @result.dig("metrics", "otsu_threshold") %></dd>
+          </div>
+          <div>
+            <dt>Método</dt>
+            <dd><%= @result.dig("parameters", "otsu_method") %></dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "morphology_mask"), alt: "Máscara após morfologia" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">05 | Refinamento</p>
+        <h2>Morfologia matemática</h2>
+        <%= link_to "Saiba mais sobre morfologia", techniques_path(anchor: "morphology"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Refino da máscara por erosão e dilatação para reduzir ruído e melhorar a continuidade das regiões segmentadas.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Operação</dt>
+            <dd><%= @result.dig("parameters", "morphology") %></dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+
+    <article class="result-row result-row-stacked">
+      <div class="result-row-content">
+        <p class="step-kicker">06 | Suavização</p>
+        <h2>Filtros aplicados</h2>
+        <%= link_to "Saiba mais sobre os filtros", techniques_path(anchor: "gaussian"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Comparação dos filtros de suavização usados para redução de ruído e preservação de detalhes antes das análises seguintes.</p>
+      </div>
+      <div class="filter-strip">
+        <figure class="filter-card">
+          <%= image_tag @result.dig("files", "gaussian"), alt: "Filtro Gaussiano" %>
+          <figcaption>Gaussiano sigma <%= @result.dig("parameters", "gaussian_sigma") %></figcaption>
+        </figure>
+        <figure class="filter-card">
+          <%= image_tag @result.dig("files", "median"), alt: "Filtro de Mediana" %>
+          <figcaption>Mediana kernel <%= @result.dig("parameters", "median_kernel") %>x<%= @result.dig("parameters", "median_kernel") %></figcaption>
+        </figure>
+        <figure class="filter-card">
+          <%= image_tag @result.dig("files", "bilateral"), alt: "Filtro Bilateral" %>
+          <figcaption>Bilateral</figcaption>
+        </figure>
+      </div>
+    </article>
+
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "histogram"), alt: "Histograma RGB" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">07 | Distribuição</p>
+        <h2>Histograma RGB</h2>
+        <%= link_to "Saiba mais sobre histograma", techniques_path(anchor: "histogram"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Distribuição das intensidades dos canais vermelho, verde e azul para apoiar a análise de contraste e predominância de cor.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Média em cinza</dt>
+            <dd><%= @result.dig("metrics", "mean_pixel_gray") %></dd>
+          </div>
+          <div>
+            <dt>Média normalizada</dt>
+            <dd><%= @result.dig("metrics", "mean_pixel_normalized") %></dd>
+          </div>
+        </dl>
+        <% if @result.dig("analysis", "histogram").present? %>
+          <p class="analysis-note"><strong>Análise:</strong> <%= @result.dig("analysis", "histogram") %></p>
+        <% end %>
+      </div>
+    </article>
+
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "vegetation_index"), alt: "Índice de vegetação VARI" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">08 | Análise ambiental</p>
+        <h2>Índice de vegetação (VARI)</h2>
+        <%= link_to "Saiba mais sobre o índice de vegetação", techniques_path(anchor: "vegetation"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Índice de vegetação adaptado de RGB (NDVI sem banda NIR), realçando áreas verdes. Valores altos (verde) indicam vegetação; valores baixos (vermelho) indicam solo, água ou construções.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Cobertura vegetal</dt>
+            <dd><%= @result.dig("metrics", "vegetation_cover_percent") %>%</dd>
+          </div>
+          <div>
+            <dt>Índice</dt>
+            <dd><%= @result.dig("parameters", "vegetation_index") %></dd>
+          </div>
+        </dl>
+        <% if @result.dig("analysis", "vegetation").present? %>
+          <p class="analysis-note"><strong>Análise:</strong> <%= @result.dig("analysis", "vegetation") %></p>
+        <% end %>
+      </div>
+    </article>
+
+    <article class="result-row">
+      <figure class="result-row-media">
+        <%= image_tag @result.dig("files", "vegetation_mask"), alt: "Máscara de cobertura vegetal" %>
+      </figure>
+      <div class="result-row-content">
+        <p class="step-kicker">09 | Cobertura vegetal</p>
+        <h2>Máscara de vegetação</h2>
+        <%= link_to "Saiba mais sobre o índice de vegetação", techniques_path(anchor: "vegetation"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Segmentação binária das regiões vegetadas obtida pela limiarização do índice VARI, base para a estimativa de cobertura verde da cena.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Limiar VARI</dt>
+            <dd><%= @result.dig("parameters", "vegetation_threshold") %></dd>
+          </div>
+        </dl>
+      </div>
+    </article>
+
+    <article class="result-row result-row-stacked">
+      <div class="result-row-content">
+        <p class="step-kicker">10 | Espaços de cor</p>
+        <h2>Conversões HSV e LAB</h2>
+        <%= link_to "Saiba mais sobre HSV e LAB", techniques_path(anchor: "hsv_lab"), class: "learn-more", target: "_blank", rel: "noopener" %>
+        <p>Representação em falsa cor das conversões para HSV (matiz, saturação, valor) e LAB (perceptual). HSV apoia a segmentação por faixa de cor da vegetação; LAB é usado em análises colorimétricas comparativas.</p>
+      </div>
+      <div class="filter-strip">
+        <figure class="filter-card">
+          <%= image_tag @result.dig("files", "hsv"), alt: "Conversao HSV em falsa cor" %>
+          <figcaption>HSV (falsa cor)</figcaption>
+        </figure>
+        <figure class="filter-card">
+          <%= image_tag @result.dig("files", "lab"), alt: "Conversao LAB em falsa cor" %>
+          <figcaption>LAB (falsa cor)</figcaption>
+        </figure>
+      </div>
+    </article>
+
+    <article class="result-row result-row-stacked">
+      <div class="result-row-content">
+        <p class="step-kicker">11 | Comparativo</p>
+        <h2>Grid comparativo das etapas</h2>
+        <p>Visão consolidada com imagem original, escala de cinza, filtros, bordas, máscaras e contornos para comparação final.</p>
+      </div>
+      <figure class="result-row-media result-row-media-wide">
+        <%= image_tag @result.dig("files", "grid"), alt: "Grid comparativo com todas as etapas" %>
+      </figure>
+    </article>
+  </section>
+
+  <% if @result.dig("analysis", "overall").present? %>
+    <section class="details-panel critical-analysis">
+      <h2>Análise crítica dos resultados</h2>
+      <p><%= @result.dig("analysis", "overall") %></p>
+    </section>
+  <% end %>
+
+  <section class="details-panel final-metrics">
+    <div>
+      <h2>Métricas</h2>
+      <table>
+        <tbody>
+          <% @result.fetch("metrics", {}).each do |name, value| %>
+            <tr>
+              <th><%= name.humanize %></th>
+              <td><%= value.nil? ? "N/A" : value %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <h2>Parâmetros</h2>
+      <table>
+        <tbody>
+          <% @result.fetch("parameters", {}).each do |name, value| %>
+            <tr>
+              <th><%= name.humanize %></th>
+              <td><%= value %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="lightbox" data-lightbox-target="modal" data-action="click->lightbox#backdrop" role="dialog" aria-modal="true">
+    <button type="button" class="lightbox-close" data-action="lightbox#close" aria-label="Fechar imagem">&times;</button>
+    <img data-lightbox-target="image" alt="">
+  </div>
+</main>

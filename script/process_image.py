@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Pipeline A3 de processamento digital de imagens ambientais.
 
-O script foi pensado para ser consumido pelo Rails via CLI. Ele salva os
-artefatos visuais em uma pasta de saida e escreve no stdout um JSON com
-metadados, metricas e caminhos dos arquivos gerados.
+O script é consumido pelo Rails via linha de comando: ele salva os artefatos
+visuais em uma pasta de saída e escreve no stdout um JSON com metadados, métricas
+e caminhos dos arquivos gerados. Por isso nenhuma função usa `print` para log —
+o único `print` é o JSON final em `main()`.
+
+A organização segue as funções principais descritas na proposta (seção 6.2):
+carregar_imagem, pre_processar, analisar_histograma, aplicar_filtros,
+detectar_bordas, segmentar, calcular_metricas e plotar_resultados.
 """
 
 from __future__ import annotations
@@ -26,6 +31,10 @@ try:
 
     import matplotlib.pyplot as plt
     import numpy as np
+    from skimage.filters import threshold_otsu
+    from skimage.measure import label
+    from skimage.morphology import dilation, erosion, footprint_rectangle
+    from skimage.segmentation import mark_boundaries
 except ModuleNotFoundError as error:
     missing_package = error.name or "dependencia"
     payload = {
@@ -40,6 +49,7 @@ except ModuleNotFoundError as error:
     sys.exit(1)
 
 
+# Parâmetros do pipeline, expostos na tela de resultado para documentar a execução.
 PARAMETERS = {
     "gaussian_sigma": 1.5,
     "median_kernel": 5,
@@ -48,7 +58,7 @@ PARAMETERS = {
     "bilateral_sigma_space": 75,
     "canny_threshold_low": 50,
     "canny_threshold_high": 150,
-    "otsu_method": "THRESH_BINARY + THRESH_OTSU",
+    "otsu_method": "threshold_otsu (scikit-image)",
     "morphology": "erosão seguida de dilatação, kernel 3x3, 1 iteração",
     "vegetation_index": "VARI = (G - R) / (G + R - B)",
     "vegetation_threshold": 0.05,
@@ -57,10 +67,13 @@ PARAMETERS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Infraestrutura (CLI, erros, IO de imagens)
+# ---------------------------------------------------------------------------
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Processa uma imagem ambiental para o projeto A3.")
     parser.add_argument("--input", required=True, help="Caminho da imagem original.")
-    parser.add_argument("--output-dir", required=True, help="Pasta onde os resultados serao salvos.")
+    parser.add_argument("--output-dir", required=True, help="Pasta onde os resultados serão salvos.")
     parser.add_argument("--max-size", type=int, default=1200, help="Maior lado da imagem processada.")
     return parser.parse_args()
 
@@ -85,22 +98,63 @@ def save_gray(path: Path, image_gray: np.ndarray) -> None:
     cv2.imwrite(str(path), image_gray)
 
 
-def resize_to_max(image: np.ndarray, max_size: int) -> np.ndarray:
-    if max_size <= 0:
-        return image
+def save_false_color(path: Path, image_3ch: np.ndarray) -> None:
+    """Salva uma representação em falsa cor de um espaço de cor (HSV/LAB).
 
-    height, width = image.shape[:2]
-    longest_side = max(height, width)
-    if longest_side <= max_size:
-        return image
-
-    scale = max_size / float(longest_side)
-    new_width = max(1, int(width * scale))
-    new_height = max(1, int(height * scale))
-    return cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    Os três canais são gravados diretamente como uma imagem para evidenciar a
+    conversão; não corresponde a cores reais, é apenas uma visualização comparativa.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), image_3ch)
 
 
-def plot_histogram(image_rgb: np.ndarray, output_path: Path) -> None:
+# ---------------------------------------------------------------------------
+# Funções principais do pipeline
+# ---------------------------------------------------------------------------
+def carregar_imagem(path: Path) -> tuple[np.ndarray, dict[str, Any]]:
+    """Lê a imagem, converte BGR -> RGB e coleta os metadados da original.
+
+    Retorna a imagem em RGB e um dicionário de metadados (em vez de imprimir,
+    para não interferir no JSON consumido pelo Rails).
+    """
+    if not path.exists():
+        fail(f"Arquivo não encontrado: {path}")
+
+    image_bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    if image_bgr is None:
+        fail("Não foi possível ler a imagem. Envie um arquivo JPG, PNG ou outro formato suportado pelo OpenCV.")
+
+    height, width = image_bgr.shape[:2]
+    metadata = {
+        "original_width": int(width),
+        "original_height": int(height),
+        "channels": int(image_bgr.shape[2]) if image_bgr.ndim == 3 else 1,
+        "size_kb": round(path.stat().st_size / 1024, 2),
+    }
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    return image_rgb, metadata
+
+
+def pre_processar(image_rgb: np.ndarray, max_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pré-processamento: redimensiona, converte para escala de cinza e normaliza.
+
+    Retorna (imagem RGB redimensionada, imagem em cinza, imagem normalizada [0,1]).
+    """
+    resized = _resize_to_max(image_rgb, max_size=max_size)
+    gray = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
+    normalized = gray.astype(np.float32) / 255.0
+    return resized, gray, normalized
+
+
+def converter_espacos_cor(image_rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Converte a imagem RGB para os espaços HSV e LAB (usados na análise de cor)."""
+    hsv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HSV)
+    lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
+    return hsv, lab
+
+
+def analisar_histograma(image_rgb: np.ndarray, output_path: Path) -> None:
+    """Plota a distribuição de intensidades dos canais R, G e B."""
     colors = {"R": "#d53e4f", "G": "#2ca25f", "B": "#3288bd"}
 
     plt.figure(figsize=(9, 5))
@@ -119,7 +173,101 @@ def plot_histogram(image_rgb: np.ndarray, output_path: Path) -> None:
     plt.close()
 
 
-def plot_grid(images: list[np.ndarray], titles: list[str], output_path: Path) -> None:
+def aplicar_filtros(image_rgb: np.ndarray) -> dict[str, np.ndarray]:
+    """Aplica os filtros de suavização Gaussiano, de Mediana e Bilateral."""
+    gaussian = cv2.GaussianBlur(image_rgb, (0, 0), PARAMETERS["gaussian_sigma"])
+    median = cv2.medianBlur(image_rgb, PARAMETERS["median_kernel"])
+    bilateral = cv2.bilateralFilter(
+        image_rgb,
+        PARAMETERS["bilateral_diameter"],
+        PARAMETERS["bilateral_sigma_color"],
+        PARAMETERS["bilateral_sigma_space"],
+    )
+    return {"gaussian": gaussian, "median": median, "bilateral": bilateral}
+
+
+def detectar_bordas(gray: np.ndarray) -> np.ndarray:
+    """Detecta bordas com o operador de Canny."""
+    return cv2.Canny(gray, PARAMETERS["canny_threshold_low"], PARAMETERS["canny_threshold_high"])
+
+
+def segmentar(gray: np.ndarray, image_rgb: np.ndarray) -> dict[str, Any]:
+    """Segmenta a imagem com scikit-image: Otsu + morfologia + contornos.
+
+    - Limiar automático via `threshold_otsu`.
+    - Refino da máscara com erosão seguida de dilatação (elemento 3x3).
+    - Rotulação das regiões e desenho dos contornos sobre a imagem original.
+    """
+    if gray.min() == gray.max():
+        threshold = float(gray.min())
+    else:
+        threshold = float(threshold_otsu(gray))
+
+    otsu_mask = (gray > threshold).astype(np.uint8) * 255
+
+    footprint = footprint_rectangle((3, 3))
+    refined = dilation(erosion(otsu_mask, footprint), footprint)
+
+    labels = label(refined > 0)
+    region_count = int(labels.max())
+
+    overlay_float = mark_boundaries(image_rgb, labels, color=(0.12, 0.86, 0.16), mode="thick")
+    contour_overlay = (np.clip(overlay_float, 0.0, 1.0) * 255).astype(np.uint8)
+
+    return {
+        "otsu_mask": otsu_mask,
+        "morphology_mask": refined,
+        "contour_overlay": contour_overlay,
+        "otsu_threshold": round(threshold, 4),
+        "region_count": region_count,
+    }
+
+
+def analisar_vegetacao(image_rgb: np.ndarray, threshold: float) -> tuple[np.ndarray, np.ndarray, float]:
+    """Calcula o índice VARI e a máscara de cobertura vegetal a partir de RGB.
+
+    VARI = (G - R) / (G + R - B). Como fotos RGB não possuem banda NIR, este é o
+    índice de vegetação adaptado pedido na proposta (NDVI adaptado). Retorna o
+    índice (float [-1, 1]), a máscara binária de vegetação e o percentual coberto.
+    """
+    rgb = image_rgb.astype(np.float32)
+    red, green, blue = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    denominator = green + red - blue
+    denominator[np.abs(denominator) < 1e-6] = 1e-6
+    vari = np.clip((green - red) / denominator, -1.0, 1.0)
+
+    mask = (vari > threshold).astype(np.uint8) * 255
+    cover_percent = round(float(np.count_nonzero(mask) / mask.size * 100), 4)
+    return vari, mask, cover_percent
+
+
+def calcular_metricas(
+    gray: np.ndarray,
+    processed_gray: np.ndarray,
+    normalized: np.ndarray,
+    morphology_mask: np.ndarray,
+    otsu_threshold: float,
+    region_count: int,
+    vegetation_cover_percent: float,
+) -> dict[str, Any]:
+    """Reúne as métricas numéricas da análise (PSNR, SNR, área segmentada, etc.)."""
+    segmented_area_percent = round(
+        float(np.count_nonzero(morphology_mask) / morphology_mask.size * 100), 4
+    )
+    return {
+        "segmented_area_percent": segmented_area_percent,
+        "vegetation_cover_percent": vegetation_cover_percent,
+        "mean_pixel_gray": round(float(np.mean(gray)), 4),
+        "mean_pixel_normalized": round(float(np.mean(normalized)), 4),
+        "otsu_threshold": round(float(otsu_threshold), 4),
+        "contour_count": region_count,
+        "psnr_bilateral_gray": _calculate_psnr(gray, processed_gray),
+        "snr_bilateral_gray": _calculate_snr(gray, processed_gray),
+    }
+
+
+def plotar_resultados(images: list[np.ndarray], titles: list[str], output_path: Path) -> None:
+    """Monta o grid visual comparativo de todas as etapas (N x 3)."""
     columns = 3
     rows = math.ceil(len(images) / columns)
     plt.figure(figsize=(14, 4.6 * rows))
@@ -138,37 +286,8 @@ def plot_grid(images: list[np.ndarray], titles: list[str], output_path: Path) ->
     plt.close()
 
 
-def save_false_color(path: Path, image_3ch: np.ndarray) -> None:
-    """Salva uma representacao em falsa cor de um espaco de cor (HSV/LAB).
-
-    Os tres canais sao gravados diretamente como uma imagem para evidenciar a
-    conversao de espaco de cor; nao corresponde a cores reais, e apenas uma
-    visualizacao comparativa da transformacao.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(path), image_3ch)
-
-
-def compute_vegetation(image_rgb: np.ndarray, threshold: float) -> tuple[np.ndarray, np.ndarray, float]:
-    """Calcula o indice VARI e a mascara de cobertura vegetal a partir de RGB.
-
-    VARI = (G - R) / (G + R - B). Como fotos RGB nao possuem banda NIR, este e o
-    indice de vegetacao adaptado pedido na proposta (NDVI adaptado). Retorna o
-    indice (float, [-1, 1]), a mascara binaria de vegetacao e o percentual coberto.
-    """
-    rgb = image_rgb.astype(np.float32)
-    red, green, blue = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
-    denominator = green + red - blue
-    denominator[np.abs(denominator) < 1e-6] = 1e-6
-    vari = (green - red) / denominator
-    vari = np.clip(vari, -1.0, 1.0)
-
-    mask = (vari > threshold).astype(np.uint8) * 255
-    cover_percent = round(float(np.count_nonzero(mask) / mask.size * 100), 4)
-    return vari, mask, cover_percent
-
-
 def plot_vegetation_index(vari: np.ndarray, output_path: Path) -> None:
+    """Plota o índice de vegetação VARI como mapa de calor."""
     plt.figure(figsize=(8, 6))
     image = plt.imshow(vari, cmap="RdYlGn", vmin=-1.0, vmax=1.0)
     plt.title("Índice de vegetação (VARI)")
@@ -181,7 +300,7 @@ def plot_vegetation_index(vari: np.ndarray, output_path: Path) -> None:
 
 
 def build_analysis(metrics: dict[str, Any], channel_means: dict[str, float]) -> dict[str, str]:
-    """Gera frases de analise critica a partir das metricas reais da imagem."""
+    """Gera frases de análise crítica a partir das métricas reais da imagem."""
     dominant_channel = max(channel_means, key=channel_means.get)
     channel_label = {"R": "vermelho", "G": "verde", "B": "azul"}[dominant_channel]
     channel_hint = {
@@ -232,14 +351,32 @@ def build_analysis(metrics: dict[str, Any], channel_means: dict[str, float]) -> 
     }
 
 
-def calculate_psnr(reference_gray: np.ndarray, processed_gray: np.ndarray) -> float | None:
+# ---------------------------------------------------------------------------
+# Auxiliares numéricos
+# ---------------------------------------------------------------------------
+def _resize_to_max(image: np.ndarray, max_size: int) -> np.ndarray:
+    if max_size <= 0:
+        return image
+
+    height, width = image.shape[:2]
+    longest_side = max(height, width)
+    if longest_side <= max_size:
+        return image
+
+    scale = max_size / float(longest_side)
+    new_width = max(1, int(width * scale))
+    new_height = max(1, int(height * scale))
+    return cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+
+def _calculate_psnr(reference_gray: np.ndarray, processed_gray: np.ndarray) -> float | None:
     mse = np.mean((reference_gray.astype(np.float64) - processed_gray.astype(np.float64)) ** 2)
     if mse == 0:
         return None
     return round(float(20 * math.log10(255.0 / math.sqrt(mse))), 4)
 
 
-def calculate_snr(reference_gray: np.ndarray, processed_gray: np.ndarray) -> float | None:
+def _calculate_snr(reference_gray: np.ndarray, processed_gray: np.ndarray) -> float | None:
     signal = np.mean(reference_gray.astype(np.float64) ** 2)
     noise = np.mean((reference_gray.astype(np.float64) - processed_gray.astype(np.float64)) ** 2)
     if noise == 0:
@@ -247,49 +384,41 @@ def calculate_snr(reference_gray: np.ndarray, processed_gray: np.ndarray) -> flo
     return round(float(10 * math.log10(signal / noise)), 4)
 
 
+# ---------------------------------------------------------------------------
+# Orquestração
+# ---------------------------------------------------------------------------
 def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str, Any]:
-    if not input_path.exists():
-        fail(f"Arquivo não encontrado: {input_path}")
-
-    image_bgr = cv2.imread(str(input_path), cv2.IMREAD_COLOR)
-    if image_bgr is None:
-        fail("Não foi possível ler a imagem. Envie um arquivo JPG, PNG ou outro formato suportado pelo OpenCV.")
-
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    original_size_kb = round(input_path.stat().st_size / 1024, 2)
-    original_height, original_width = image_bgr.shape[:2]
-    channels = image_bgr.shape[2] if image_bgr.ndim == 3 else 1
+    image_rgb_full, metadata = carregar_imagem(input_path)
+    image_rgb, gray, normalized = pre_processar(image_rgb_full, max_size=max_size)
+    metadata["processed_width"] = int(image_rgb.shape[1])
+    metadata["processed_height"] = int(image_rgb.shape[0])
 
-    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-    image_rgb = resize_to_max(image_rgb, max_size=max_size)
-    gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
-    normalized = gray.astype(np.float32) / 255.0
-
-    hsv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HSV)
-    lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
-    vari, vegetation_mask, vegetation_cover_percent = compute_vegetation(
+    hsv, lab = converter_espacos_cor(image_rgb)
+    filtros = aplicar_filtros(image_rgb)
+    edges = detectar_bordas(gray)
+    segmentacao = segmentar(gray, image_rgb)
+    vari, vegetation_mask, vegetation_cover_percent = analisar_vegetacao(
         image_rgb, PARAMETERS["vegetation_threshold"]
     )
 
-    gaussian = cv2.GaussianBlur(image_rgb, (0, 0), PARAMETERS["gaussian_sigma"])
-    median = cv2.medianBlur(image_rgb, PARAMETERS["median_kernel"])
-    bilateral = cv2.bilateralFilter(
-        image_rgb,
-        PARAMETERS["bilateral_diameter"],
-        PARAMETERS["bilateral_sigma_color"],
-        PARAMETERS["bilateral_sigma_space"],
+    processed_gray = cv2.cvtColor(filtros["bilateral"], cv2.COLOR_RGB2GRAY)
+    channel_means = {
+        "R": float(np.mean(image_rgb[:, :, 0])),
+        "G": float(np.mean(image_rgb[:, :, 1])),
+        "B": float(np.mean(image_rgb[:, :, 2])),
+    }
+
+    metrics = calcular_metricas(
+        gray=gray,
+        processed_gray=processed_gray,
+        normalized=normalized,
+        morphology_mask=segmentacao["morphology_mask"],
+        otsu_threshold=segmentacao["otsu_threshold"],
+        region_count=segmentacao["region_count"],
+        vegetation_cover_percent=vegetation_cover_percent,
     )
-
-    edges = cv2.Canny(gray, PARAMETERS["canny_threshold_low"], PARAMETERS["canny_threshold_high"])
-    otsu_threshold, otsu_mask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    kernel = np.ones((3, 3), np.uint8)
-    morph_mask = cv2.dilate(cv2.erode(otsu_mask, kernel, iterations=1), kernel, iterations=1)
-
-    contours, _ = cv2.findContours(morph_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contour_overlay_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
-    cv2.drawContours(contour_overlay_bgr, contours, -1, (30, 220, 40), 2)
-    contour_overlay = cv2.cvtColor(contour_overlay_bgr, cv2.COLOR_BGR2RGB)
 
     paths = {
         "original": output_dir / "original.png",
@@ -311,29 +440,29 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
 
     save_rgb(paths["original"], image_rgb)
     save_gray(paths["gray"], gray)
-    save_rgb(paths["gaussian"], gaussian)
-    save_rgb(paths["median"], median)
-    save_rgb(paths["bilateral"], bilateral)
+    save_rgb(paths["gaussian"], filtros["gaussian"])
+    save_rgb(paths["median"], filtros["median"])
+    save_rgb(paths["bilateral"], filtros["bilateral"])
     save_gray(paths["edges"], edges)
-    save_gray(paths["otsu_mask"], otsu_mask)
-    save_gray(paths["morphology_mask"], morph_mask)
-    save_rgb(paths["contours"], contour_overlay)
+    save_gray(paths["otsu_mask"], segmentacao["otsu_mask"])
+    save_gray(paths["morphology_mask"], segmentacao["morphology_mask"])
+    save_rgb(paths["contours"], segmentacao["contour_overlay"])
     save_false_color(paths["hsv"], hsv)
     save_false_color(paths["lab"], lab)
     save_gray(paths["vegetation_mask"], vegetation_mask)
-    plot_histogram(image_rgb, paths["histogram"])
+    analisar_histograma(image_rgb, paths["histogram"])
     plot_vegetation_index(vari, paths["vegetation_index"])
-    plot_grid(
+    plotar_resultados(
         [
             image_rgb,
             gray,
-            gaussian,
-            median,
-            bilateral,
+            filtros["gaussian"],
+            filtros["median"],
+            filtros["bilateral"],
             edges,
-            otsu_mask,
-            morph_mask,
-            contour_overlay,
+            segmentacao["otsu_mask"],
+            segmentacao["morphology_mask"],
+            segmentacao["contour_overlay"],
             vari,
             vegetation_mask,
         ],
@@ -344,44 +473,18 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
             "Filtro de Mediana",
             "Filtro Bilateral",
             "Bordas Canny",
-            "Mascara Otsu",
+            "Máscara Otsu",
             "Morfologia",
             "Contornos",
-            "Indice VARI",
-            "Mascara de vegetacao",
+            "Índice VARI",
+            "Máscara de vegetação",
         ],
         paths["grid"],
     )
 
-    processed_gray = cv2.cvtColor(bilateral, cv2.COLOR_RGB2GRAY)
-    segmented_area_percent = round(float(np.count_nonzero(morph_mask) / morph_mask.size * 100), 4)
-    channel_means = {
-        "R": float(np.mean(image_rgb[:, :, 0])),
-        "G": float(np.mean(image_rgb[:, :, 1])),
-        "B": float(np.mean(image_rgb[:, :, 2])),
-    }
-
-    metrics = {
-        "segmented_area_percent": segmented_area_percent,
-        "vegetation_cover_percent": vegetation_cover_percent,
-        "mean_pixel_gray": round(float(np.mean(gray)), 4),
-        "mean_pixel_normalized": round(float(np.mean(normalized)), 4),
-        "otsu_threshold": round(float(otsu_threshold), 4),
-        "contour_count": len(contours),
-        "psnr_bilateral_gray": calculate_psnr(gray, processed_gray),
-        "snr_bilateral_gray": calculate_snr(gray, processed_gray),
-    }
-
     return {
         "ok": True,
-        "metadata": {
-            "original_width": original_width,
-            "original_height": original_height,
-            "processed_width": int(image_rgb.shape[1]),
-            "processed_height": int(image_rgb.shape[0]),
-            "channels": channels,
-            "size_kb": original_size_kb,
-        },
+        "metadata": metadata,
         "metrics": metrics,
         "analysis": build_analysis(metrics, channel_means),
         "parameters": PARAMETERS,

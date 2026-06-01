@@ -265,7 +265,7 @@
         <tbody>
           <% @result.fetch("metrics", {}).each do |name, value| %>
             <tr>
-              <th><%= name.humanize %></th>
+              <th><%= result_label(name) %></th>
               <td><%= value.nil? ? "N/A" : value %></td>
             </tr>
           <% end %>
@@ -279,7 +279,7 @@
         <tbody>
           <% @result.fetch("parameters", {}).each do |name, value| %>
             <tr>
-              <th><%= name.humanize %></th>
+              <th><%= result_label(name) %></th>
               <td><%= value %></td>
             </tr>
           <% end %>

@@ -1,44 +1,42 @@
-# Eco Vision A3
+# Eco Vision
 
-Projeto Rails + Python para a Avaliacao A3 de Computacao Grafica. A interface
-web recebe uma imagem ambiental enviada pelo usuario e chama um script Python
-que executa o pipeline completo de processamento digital de imagens.
+Pipeline de processamento digital de imagens ambientais em Python. Recebe uma
+imagem (foto ou imagem de satélite), executa o pipeline completo de tratamento e
+gera os artefatos visuais junto a um relatório de métricas.
 
-## Objetivo
+O núcleo do sistema é Python e roda de forma totalmente independente. Há também
+uma aplicação Ruby on Rails **opcional**, pensada apenas para uma melhor
+experiência de visualização (upload pela web e histórico das análises). O
+processamento funciona normalmente sem ela.
 
-O sistema aplica tecnicas pedidas na proposta do trabalho:
+## O que o pipeline faz
 
-- leitura e conversao BGR -> RGB;
-- escala de cinza, redimensionamento e normalizacao;
-- conversao para os espacos de cor HSV e LAB;
+- leitura e conversão BGR -> RGB;
+- escala de cinza, redimensionamento e normalização;
+- conversão para os espaços de cor HSV e LAB;
 - histograma RGB;
 - filtros Gaussiano, Mediana e Bilateral;
-- deteccao de bordas com Canny;
-- segmentacao por Otsu;
-- morfologia matematica;
-- contornos sobrepostos;
-- analise ambiental: indice de vegetacao VARI (NDVI adaptado de RGB) e mascara de
+- detecção de bordas com Canny;
+- segmentação por Otsu e morfologia matemática;
+- contornos sobrepostos na imagem original;
+- análise ambiental: índice de vegetação VARI (NDVI adaptado de RGB) e máscara de
   cobertura vegetal;
-- analise critica automatica gerada a partir das metricas reais da imagem;
-- metricas como area segmentada, cobertura vegetal, media de pixels, PSNR e SNR.
+- métricas: área segmentada, cobertura vegetal, média de pixels, PSNR e SNR.
 
-## Dependencias
+## Requisitos
 
-- Ruby 4.0.2
-- Rails 8.1
 - Python 3.10 ou superior
 - OpenCV, NumPy, Matplotlib, Pillow e scikit-image
 
-Instale as dependencias Python:
+## Instalação
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Se o comando de `venv` falhar informando que `ensurepip` nao esta disponivel,
-instale o pacote `python3-venv` do sistema ou use o bootstrap oficial do pip no
-ambiente criado:
+Se o `venv` falhar informando que `ensurepip` não está disponível, instale o
+pacote `python3-venv` do sistema ou use o bootstrap oficial do pip:
 
 ```bash
 curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
@@ -46,38 +44,7 @@ curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Instale as dependencias Ruby e prepare o banco (SQLite, usado para o historico):
-
-```bash
-bundle install
-bin/rails db:prepare
-```
-
-## Como rodar o app
-
-```bash
-bin/rails server
-```
-
-Acesse `http://localhost:3000`. A aplicacao tem:
-
-- **Inicio (`/`)** — landing de apresentacao, com botao para iniciar a analise e o
-  historico das analises ja realizadas (data/hora + metricas), que abrem o detalhe.
-- **Nova analise (`/analyses/new`)** — envio da imagem ambiental.
-- **Tecnicas (`/tecnicas`)** — explicacao tecnica de cada metodo do pipeline.
-- **Resultado (`/analyses/:id`)** — detalhamento de uma analise, revisitavel pelo historico.
-
-Cada analise e persistida no banco (metadados/metricas/caminhos); as imagens geradas
-ficam em `public/resultados/<id>`.
-
-Por padrao o Rails tenta usar `.venv/bin/python`. Se quiser apontar para outro
-Python, defina:
-
-```bash
-PYTHON_BIN=/caminho/para/python bin/rails server
-```
-
-## Como rodar apenas o Python
+## Como executar
 
 ```bash
 .venv/bin/python script/process_image.py \
@@ -86,30 +53,46 @@ PYTHON_BIN=/caminho/para/python bin/rails server
   --max-size 1200
 ```
 
-O script imprime um JSON no terminal com metadados, metricas, parametros e
-caminhos dos arquivos gerados.
+Parâmetros:
 
-## Entrega academica
+- `--input` — caminho da imagem de entrada (JPG, PNG, etc.).
+- `--output-dir` — pasta onde as imagens geradas serão salvas.
+- `--max-size` — maior lado da imagem processada, em pixels (padrão 1200).
 
-Os entregaveis textuais da proposta A3 tem modelos prontos em `docs/`:
+O script salva os artefatos visuais na pasta de saída e imprime no terminal um
+JSON com metadados, métricas, parâmetros e os caminhos dos arquivos gerados.
 
-- [`docs/ORIGEM_DA_IMAGEM.md`](docs/ORIGEM_DA_IMAGEM.md) — documente equipamento,
-  local, data e como a captura/download foi feito (criterio de 15%). Salve a imagem
-  usada como `imagem_original.png` na raiz.
-- [`docs/RELATORIO_A3.md`](docs/RELATORIO_A3.md) — base para gerar o `Artigo_a3.pdf`;
-  cole as imagens reais de `public/resultados/<id>/` e a tabela de metricas.
+## Interface web (opcional)
 
-## Limpeza dos resultados
+A aplicação Rails apenas embrulha o script Python para oferecer upload e
+visualização das análises no navegador. Não é necessária para o processamento.
 
-As execucoes acumulam pastas em `public/resultados/`. Para podar as antigas:
+Requisitos adicionais: Ruby 4.0.2 e Rails 8.1.
 
 ```bash
-bin/rails resultados:limpar            # remove pastas com mais de 7 dias
-KEEP_DAYS=1 bin/rails resultados:limpar # ajusta o limite em dias
+bundle install
+bin/rails db:prepare
+bin/rails server
 ```
 
-## Testes
+Acesse `http://localhost:3000`:
+
+- **Início (`/`)** — apresentação e histórico das análises já realizadas.
+- **Nova análise (`/analyses/new`)** — envio da imagem.
+- **Técnicas (`/tecnicas`)** — explicação de cada método do pipeline.
+- **Resultado (`/analyses/:id`)** — detalhe de uma análise.
+
+Cada análise é persistida (metadados/métricas/caminhos) e as imagens geradas
+ficam em `public/resultados/<id>`. Por padrão o Rails usa `.venv/bin/python`;
+para apontar outro interpretador, defina `PYTHON_BIN`:
 
 ```bash
-bin/rails test
+PYTHON_BIN=/caminho/para/python bin/rails server
+```
+
+As execuções acumulam pastas em `public/resultados/`. Para remover as antigas:
+
+```bash
+bin/rails resultados:limpar             # remove pastas com mais de 7 dias
+KEEP_DAYS=1 bin/rails resultados:limpar # ajusta o limite em dias
 ```

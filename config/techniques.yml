@@ -26,16 +26,19 @@ hsv_lab:
     separa a Luminosidade (L) de dois eixos de cor (a: verde-vermelho, b: azul-amarelo)
     e foi desenhado para se aproximar da percepção humana.
   how: >
-    O pipeline converte a imagem RGB para HSV e para LAB. No HSV, isolar um intervalo
-    de Matiz permite segmentar por faixa de cor (ex.: tons de verde da vegetação)
-    independente da iluminação. No LAB, a separação luz/cor ajuda comparações
-    colorimétricas mais fiéis ao que enxergamos.
+    O pipeline converte a imagem RGB para HSV e para LAB. No HSV, o pipeline aplica
+    cv2.inRange na faixa de verde (35,40,40)-(85,255,255) e gera uma máscara de
+    vegetação por cor, com seu percentual de cobertura, independente da iluminação.
+    No LAB, a separação luz/cor ajuda comparações colorimétricas mais fiéis ao que
+    enxergamos.
   goal: >
     Oferecer espaços de cor mais adequados que o RGB para tarefas específicas:
     segmentação por cor (HSV) e análise colorimétrica perceptual (LAB).
   interpret: >
-    As visualizações são em falsa cor (os três canais exibidos como imagem) e servem
-    para evidenciar a transformação, não para leitura literal de cores.
+    As conversões HSV/LAB aparecem em falsa cor (os três canais exibidos como imagem)
+    para evidenciar a transformação. Já a máscara de vegetação HSV é binária: branco =
+    pixel dentro da faixa de verde. Compare-a com a máscara do VARI: dois métodos
+    distintos chegando a estimativas próximas de cobertura verde.
   params: "Faixa de verde HSV usada: (35,40,40) a (85,255,255)"
 
 histogram:

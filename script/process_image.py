@@ -49,6 +49,13 @@ except ModuleNotFoundError as error:
     sys.exit(1)
 
 
+# Faixa de verde no espaço HSV usada na segmentação por cor da vegetação.
+# São tuplas numéricas (cv2.inRange exige); as strings equivalentes ficam em
+# PARAMETERS para exibição na tabela de parâmetros da tela de resultado.
+HSV_GREEN_LOWER = (35, 40, 40)
+HSV_GREEN_UPPER = (85, 255, 255)
+
+
 # Parâmetros do pipeline, expostos na tela de resultado para documentar a execução.
 PARAMETERS = {
     "gaussian_sigma": 1.5,
@@ -241,6 +248,19 @@ def analisar_vegetacao(image_rgb: np.ndarray, threshold: float) -> tuple[np.ndar
     return vari, mask, cover_percent
 
 
+def segmentar_vegetacao_hsv(hsv: np.ndarray) -> tuple[np.ndarray, float]:
+    """Segmenta a vegetação por faixa de verde no espaço HSV.
+
+    Complementa o VARI com um método independente baseado em cor: `cv2.inRange`
+    mantém apenas os pixels cujo matiz/saturação/valor caem na faixa de verde
+    (HSV_GREEN_LOWER..HSV_GREEN_UPPER). Retorna a máscara binária e o percentual
+    de área verde, no mesmo formato usado por `analisar_vegetacao`.
+    """
+    mask = cv2.inRange(hsv, HSV_GREEN_LOWER, HSV_GREEN_UPPER)
+    cover_percent = round(float(np.count_nonzero(mask) / mask.size * 100), 4)
+    return mask, cover_percent
+
+
 def calcular_metricas(
     gray: np.ndarray,
     processed_gray: np.ndarray,
@@ -249,6 +269,7 @@ def calcular_metricas(
     otsu_threshold: float,
     region_count: int,
     vegetation_cover_percent: float,
+    hsv_green_cover_percent: float,
 ) -> dict[str, Any]:
     """Reúne as métricas numéricas da análise (PSNR, SNR, área segmentada, etc.)."""
     segmented_area_percent = round(
@@ -257,6 +278,7 @@ def calcular_metricas(
     return {
         "segmented_area_percent": segmented_area_percent,
         "vegetation_cover_percent": vegetation_cover_percent,
+        "hsv_green_cover_percent": hsv_green_cover_percent,
         "mean_pixel_gray": round(float(np.mean(gray)), 4),
         "mean_pixel_normalized": round(float(np.mean(normalized)), 4),
         "otsu_threshold": round(float(otsu_threshold), 4),
@@ -340,7 +362,9 @@ def build_analysis(metrics: dict[str, Any], channel_means: dict[str, float]) -> 
             f"({area:.1f}% da área), com {metrics['contour_count']} contornos após a morfologia."
         ),
         "vegetation": (
-            f"O índice VARI estima {cover:.1f}% de cobertura vegetal: {cover_reading}."
+            f"O índice VARI estima {cover:.1f}% de cobertura vegetal: {cover_reading}. "
+            f"A segmentação por faixa de verde HSV, método independente, aponta "
+            f"{metrics['hsv_green_cover_percent']:.1f}% de área verde, corroborando a estimativa."
         ),
         "overall": (
             f"A cena apresenta {channel_hint}; a limiarização destacou {area:.1f}% de regiões "
@@ -402,6 +426,7 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
     vari, vegetation_mask, vegetation_cover_percent = analisar_vegetacao(
         image_rgb, PARAMETERS["vegetation_threshold"]
     )
+    hsv_vegetation_mask, hsv_green_cover_percent = segmentar_vegetacao_hsv(hsv)
 
     processed_gray = cv2.cvtColor(filtros["bilateral"], cv2.COLOR_RGB2GRAY)
     channel_means = {
@@ -418,6 +443,7 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
         otsu_threshold=segmentacao["otsu_threshold"],
         region_count=segmentacao["region_count"],
         vegetation_cover_percent=vegetation_cover_percent,
+        hsv_green_cover_percent=hsv_green_cover_percent,
     )
 
     paths = {
@@ -435,6 +461,7 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
         "lab": output_dir / "lab.png",
         "vegetation_index": output_dir / "vegetation_index.png",
         "vegetation_mask": output_dir / "vegetation_mask.png",
+        "hsv_vegetation_mask": output_dir / "hsv_vegetation_mask.png",
         "grid": output_dir / "comparison_grid.png",
     }
 
@@ -450,6 +477,7 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
     save_false_color(paths["hsv"], hsv)
     save_false_color(paths["lab"], lab)
     save_gray(paths["vegetation_mask"], vegetation_mask)
+    save_gray(paths["hsv_vegetation_mask"], hsv_vegetation_mask)
     analisar_histograma(image_rgb, paths["histogram"])
     plot_vegetation_index(vari, paths["vegetation_index"])
     plotar_resultados(
@@ -465,6 +493,7 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
             segmentacao["contour_overlay"],
             vari,
             vegetation_mask,
+            hsv_vegetation_mask,
         ],
         [
             "Original",
@@ -478,6 +507,7 @@ def process_image(input_path: Path, output_dir: Path, max_size: int) -> dict[str
             "Contornos",
             "Índice VARI",
             "Máscara de vegetação",
+            "Vegetação HSV",
         ],
         paths["grid"],
     )

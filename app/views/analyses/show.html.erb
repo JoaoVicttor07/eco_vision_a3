@@ -225,12 +225,26 @@
         <p class="step-kicker">10 | Espaços de cor</p>
         <h2>Conversões HSV e LAB</h2>
         <%= link_to "Saiba mais sobre HSV e LAB", techniques_path(anchor: "hsv_lab"), class: "learn-more", target: "_blank", rel: "noopener" %>
-        <p>Representação em falsa cor das conversões para HSV (matiz, saturação, valor) e LAB (perceptual). HSV apoia a segmentação por faixa de cor da vegetação; LAB é usado em análises colorimétricas comparativas.</p>
+        <p>Representação em falsa cor das conversões para HSV (matiz, saturação, valor) e LAB (perceptual). A faixa de verde no HSV é aplicada com <code>cv2.inRange</code> para segmentar a vegetação por cor — método independente do índice VARI; LAB é usado em análises colorimétricas comparativas.</p>
+        <dl class="detail-list">
+          <div>
+            <dt>Cobertura verde (HSV)</dt>
+            <dd><%= @result.dig("metrics", "hsv_green_cover_percent") %>%</dd>
+          </div>
+          <div>
+            <dt>Faixa de verde HSV</dt>
+            <dd><%= @result.dig("parameters", "hsv_green_lower") %> → <%= @result.dig("parameters", "hsv_green_upper") %></dd>
+          </div>
+        </dl>
       </div>
       <div class="filter-strip">
         <figure class="filter-card">
           <%= image_tag @result.dig("files", "hsv"), alt: "Conversao HSV em falsa cor" %>
           <figcaption>HSV (falsa cor)</figcaption>
+        </figure>
+        <figure class="filter-card">
+          <%= image_tag @result.dig("files", "hsv_vegetation_mask"), alt: "Mascara de vegetacao por faixa de verde HSV" %>
+          <figcaption>Vegetação por faixa HSV</figcaption>
         </figure>
         <figure class="filter-card">
           <%= image_tag @result.dig("files", "lab"), alt: "Conversao LAB em falsa cor" %>

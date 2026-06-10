@@ -6,6 +6,7 @@ module AnalysesHelper
     # Métricas
     "segmented_area_percent" => "Área segmentada (%)",
     "vegetation_cover_percent" => "Cobertura vegetal (%)",
+    "hsv_green_cover_percent" => "Cobertura verde HSV (%)",
     "mean_pixel_gray" => "Brilho médio (cinza)",
     "mean_pixel_normalized" => "Brilho médio (normalizado)",
     "otsu_threshold" => "Limiar de Otsu",
